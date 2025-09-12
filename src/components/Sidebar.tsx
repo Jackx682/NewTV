@@ -148,11 +148,6 @@ const Sidebar = ({ onToggle }: SidebarProps) => {
       label: '直播',
       href: '/live',
     },
-    {
-      icon: Youtube,
-      label: 'YouTube',
-      href: '/youtube',
-    },
   ]);
 
   useEffect(() => {
