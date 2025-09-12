@@ -25,7 +25,6 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
     { icon: Film, label: '电影', href: '/douban?type=movie' },
     { icon: Tv, label: '剧集', href: '/douban?type=tv' },
     { icon: Radio, label: '直播', href: '/live' },
-    { icon: Youtube, label: 'YouTube', href: '/youtube' },
     { icon: Ellipsis, label: '更多', href: '#more' },
   ]);
 
