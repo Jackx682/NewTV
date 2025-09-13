@@ -2220,7 +2220,7 @@ function PlayPageClient() {
                   modes: JSON.parse(localStorage.getItem('danmaku_modes') || '[0, 1, 2]') as Array<0 | 1 | 2>,
                   margin: JSON.parse(localStorage.getItem('danmaku_margin') || '[10, "75%"]') as [number | `${number}%`, number | `${number}%`],
                   visible: localStorage.getItem('danmaku_visible') !== 'false',
-                  emitter: true, // 开启官方弹幕发射器
+                  emitter: false, // 开启官方弹幕发射器
                   maxLength: 200,
                   lockTime: 5, // v5.2.0优化: 减少锁定时间，降低快进时的延迟
                   theme: 'dark' as const,
