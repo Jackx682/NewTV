@@ -35,7 +35,7 @@ interface Channel {
 
 const YouTubePage = () => {
   const searchParams = useSearchParams();
-  
+
   // --- 状态管理 ---
   const [isOnline, setIsOnline] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,10 +63,15 @@ const YouTubePage = () => {
   // --- 数据加载 Effect ---
   useEffect(() => {
     const checkYouTubeAccess = async () => {
+      let isTimeout = false;
+      
       try {
         // 设置8秒超时控制
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒超时
+        const timeoutId = setTimeout(() => {
+          isTimeout = true;
+          controller.abort();
+        }, 8000); // 8秒超时
 
         await fetch('https://www.youtube.com/favicon.ico', {
           method: 'HEAD',
@@ -76,33 +81,79 @@ const YouTubePage = () => {
         });
 
         clearTimeout(timeoutId);
-        setIsOnline(true);
-      } catch (error) {
-        try {
-          const proxyResponse = await fetch('/api/youtube-check');
-          setIsOnline(proxyResponse.ok);
-        } catch (proxyError) {
+        
+        // 如果没有超时，网络检测成功
+        if (!isTimeout) {
+          setIsOnline(true);
+          // 网络检测通过后，检查配置并加载数据
+          await checkConfigAndLoadData();
+        } else {
+          // 超时了，强制设置为离线
           setIsOnline(false);
+        }
+      } catch (error) {
+        // 如果是超时导致的错误，直接设置为离线
+        if (isTimeout) {
+          setIsOnline(false);
+        } else {
+          // 尝试备用检测
+          try {
+            const proxyResponse = await fetch('/api/youtube-check');
+            if (proxyResponse.ok) {
+              setIsOnline(true);
+              // 网络检测通过后，检查配置并加载数据
+              await checkConfigAndLoadData();
+            } else {
+              // 网络检测失败，固定显示网络错误页面
+              setIsOnline(false);
+            }
+          } catch (proxyError) {
+            // 网络检测失败，固定显示网络错误页面
+            setIsOnline(false);
+          }
         }
       } finally {
         setIsLoading(false);
       }
     };
 
-    const loadChannelsAndVideos = async () => {
+    const checkConfigAndLoadData = async () => {
       try {
+        // 检查是否配置了频道
         const channelsResponse = await fetch('/api/youtube-channels');
-        if (!channelsResponse.ok) return;
+        if (!channelsResponse.ok) {
+          // API调用失败，可能是未配置API key
+          setLoadingVideos(false);
+          setInitialLoadComplete(true);
+          return;
+        }
 
         const channelsData = await channelsResponse.json();
         const loadedChannels = channelsData.channels || [];
-        if (loadedChannels.length === 0) return;
+        
+        if (loadedChannels.length === 0) {
+          // 没有配置频道，显示配置提示页面
+          setLoadingVideos(false);
+          setInitialLoadComplete(true);
+          return;
+        }
 
+        // 配置正常，加载视频数据
+        await loadChannelsAndVideos(loadedChannels);
+      } catch (error) {
+        console.error('检查配置失败:', error);
+        setLoadingVideos(false);
+        setInitialLoadComplete(true);
+      }
+    };
+
+    const loadChannelsAndVideos = async (loadedChannels: Channel[]) => {
+      try {
         const newVideosByChannel: { [key: string]: YouTubeVideo[] } = {};
 
         // 确保频道按sortOrder排序
         const sortedChannels = loadedChannels.sort((a: any, b: any) => (a.sortOrder || 0) - (b.sortOrder || 0));
-        
+
         const updatedChannels = await Promise.all(
           sortedChannels.map(async (channel: Channel) => {
             try {
@@ -139,7 +190,6 @@ const YouTubePage = () => {
     };
 
     checkYouTubeAccess();
-    loadChannelsAndVideos();
   }, []);
 
   // 处理URL参数中的play参数
@@ -295,7 +345,7 @@ const YouTubePage = () => {
     );
   }
 
-  // 无法访问YouTube
+  // 无法访问YouTube - 网络环境问题
   if (isOnline === false) {
     return (
       <PageLayout>
@@ -306,13 +356,13 @@ const YouTubePage = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">无法访问YouTube</h2>
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">网络环境无法访问YouTube</h2>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
               抱歉，您的网络暂不支持访问YouTube。请检查您的网络连接或代理设置。
             </p>
             <div className="space-y-2">
-              <button onClick={() => window.location.reload()} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors block w-full">重新检测</button>
-              <a href="https://www.youtube.com" target="_blank" rel="noopener noreferrer" className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors block w-full text-center">在新标签页打开YouTube</a>
+              <button onClick={() => window.location.reload()} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors block w-full">重新检测网络</button>
+              <a href="https://www.youtube.com" target="_blank" rel="noopener noreferrer" className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors block w-full text-center">尝试直接访问YouTube</a>
             </div>
           </div>
         </div>
@@ -510,7 +560,7 @@ const YouTubePage = () => {
                       };
                       return <YouTubeVideoCard key={channel.id} video={pseudoVideo} showActions={false} onPlay={handleVideoPlay} currentPlayingId={currentPlayingId} />
                     }
-                    
+
                     // 显示最新的单个视频，添加playlist前缀以区分推荐视频中的同一视频
                     const singleVideo = {
                       id: { videoId: `playlist-${latestVideo.id.videoId}` },
@@ -594,18 +644,34 @@ const YouTubePage = () => {
               </div>
             </div>
           ) : (
-            /* 无频道数据时的占位符 */
-            <div className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" /></svg>
+            /* 能访问YouTube但未配置频道时的提示 */
+            <div className="flex items-center justify-center min-h-96 py-8">
+              <div className="text-center max-w-2xl mx-auto p-6">
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">暂无视频</h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">请在管理后台添加YouTube频道，即可显示视频内容</p>
-                <a href="https://www.youtube.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
-                  <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" /></svg>
-                  访问YouTube官网
-                </a>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">还未配置YouTube频道</h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-12">
+                  YouTube连接正常，但管理员还未配置任何频道。请联系管理员在后台添加YouTube频道和配置API密钥。
+                </p>
+                <div className="mb-4">
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">管理员配置指南：</h4>
+                  <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1 text-left">
+                    <li>• 前往管理后台 → YouTube管理</li>
+                    <li>• 添加YouTube频道（支持频道链接、@用户名或频道ID）</li>
+                    <li>• 并在环境变量中配置 YOUTUBE_API_KEY</li>
+                    <li>• 保存配置后即可显示频道视频内容</li>
+                  </ul>
+                </div>
+                <div className="space-y-2">
+                  <a href="https://www.youtube.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
+                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" /></svg>
+                    访问YouTube官网
+                  </a>
+                </div>
               </div>
             </div>
           )}
