@@ -249,7 +249,7 @@ const AIChatModal = ({ isOpen, onClose }: AIChatModalProps) => {
     >
       <div className="glass-strong rounded-lg shadow-xl w-full max-w-2xl h-[80vh] flex flex-col">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">NewTV AI 荐片助手</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">AI 荐片助手</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white">
             <X className="w-5 h-5" />
           </button>
